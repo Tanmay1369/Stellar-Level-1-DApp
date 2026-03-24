@@ -1,89 +1,148 @@
-import { isConnected, requestAccess, signTransaction } from "@stellar/freighter-api";
-import { Horizon, TransactionBuilder, Networks, BASE_FEE, Operation, Asset, Transaction } from "@stellar/stellar-sdk";
+import { StellarWalletsKit } from '@creit.tech/stellar-wallets-kit';
+import { FreighterModule } from '@creit.tech/stellar-wallets-kit/modules/freighter';
+import { xBullModule } from '@creit.tech/stellar-wallets-kit/modules/xbull';
+import { rpc, TransactionBuilder, Networks, Contract, Keypair, xdr } from '@stellar/stellar-sdk';
 
-// Initialize Horizon context for Testnet
-export const server = new Horizon.Server("https://horizon-testnet.stellar.org");
+// Initialize the Soroban RPC Server
+export const server = new rpc.Server('https://soroban-testnet.stellar.org');
+export const CONTRACT_ID = 'CDRZCJDK7G5U4PBKLTPQL4ENKLPHHJJ4A75G6OFPKBPFPHIDRP73GDUC';
 
-export const checkFreighterConnection = async (): Promise<boolean> => {
-  if (typeof window !== "undefined") {
-    const res = await isConnected();
-    return res.isConnected;
+export const FREIGHTER_ID = 'freighter';
+export const XBULL_ID = 'xbull';
+
+// Initialize StellarWalletsKit using Static init
+StellarWalletsKit.init({
+  network: "TESTNET" as any,
+  selectedWalletId: FREIGHTER_ID,
+  modules: [new FreighterModule(), new xBullModule()],
+});
+
+/** Wait for a transaction to complete */
+async function pollTransactionStatus(txHash: string) {
+  let status = await server.getTransaction(txHash);
+  while ((status.status as any) === 'NOT_FOUND' || (status.status as any) === 'PENDING') {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    status = await server.getTransaction(txHash);
   }
-  return false;
-};
+  return status;
+}
 
-export const connectWallet = async (): Promise<string | null> => {
+export const connectWallet = async (walletId = FREIGHTER_ID): Promise<string | null> => {
   try {
-    const res = await requestAccess();
-    if (res.error) {
-      console.error("Failed to connect wallet:", res.error);
-      return null;
-    }
-    return res.address || null;
+    StellarWalletsKit.setWallet(walletId);
+    // request access by getting the address directly
+    const res = await StellarWalletsKit.getAddress();
+    return res.address;
   } catch (error) {
-    console.error("Unexpected error connecting wallet:", error);
+    if (String(error).includes("not installed")) {
+      throw new Error("WalletNotFound");
+    }
+    if (String(error).includes("rejected") || String(error).includes("User declined")) {
+      throw new Error("WalletRejected");
+    }
+    console.error("Error connecting wallet:", error);
     return null;
   }
 };
 
+/** Fetch the user's XLM balance to check for Insufficient Balance */
 export const fetchBalance = async (publicKey: string): Promise<string> => {
   try {
-    const account = await server.loadAccount(publicKey);
-    const nativeBalance = account.balances.find((b: any) => b.asset_type === "native");
-    return nativeBalance ? nativeBalance.balance : "0";
+    const res = await fetch(`https://horizon-testnet.stellar.org/accounts/${publicKey}`);
+    const data = await res.json();
+    if (data.status === 404) return "0";
+    const native = data.balances?.find((b: any) => b.asset_type === 'native');
+    return native ? native.balance : "0";
   } catch (error) {
     console.error("Failed to fetch balance:", error);
     return "0";
   }
 };
 
-export const sendTransaction = async (
-  fromPublicKey: string,
-  toPublicKey: string,
-  amount: string
-): Promise<string> => {
+/** Fetch current votes from the smart contract */
+export const getPollVotes = async (): Promise<{ yes: number; no: number }> => {
   try {
-    // 1. Load the sender account to get current sequence number
-    const account = await server.loadAccount(fromPublicKey);
+    const contract = new Contract(CONTRACT_ID);
+    const dummyAccount = Keypair.random().publicKey();
 
-    // 2. Build the transaction
-    const tx = new TransactionBuilder(account, {
-      fee: BASE_FEE,
-      networkPassphrase: Networks.TESTNET,
-    })
-      .addOperation(
-        Operation.payment({
-          destination: toPublicKey,
-          asset: Asset.native(),
-          amount: amount,
-        })
-      )
+    let tx = new TransactionBuilder(await server.getAccount(dummyAccount).catch(() => null) || {
+      accountId: () => dummyAccount,
+      sequenceNumber: () => "0",
+      incrementSequenceNumber: () => { }
+    } as any, { fee: '100', networkPassphrase: Networks.TESTNET })
+      .addOperation(contract.call('get_votes'))
       .setTimeout(30)
       .build();
 
-    // 3. Sign the transaction using Freighter
-    const xdr = tx.toXDR();
-    const res = await signTransaction(xdr, { networkPassphrase: Networks.TESTNET });
+    const simRes = await server.simulateTransaction(tx);
 
-    if (res.error) {
-      throw new Error(res.error.toString());
+    if (rpc.Api.isSimulationSuccess(simRes) && simRes.result && simRes.result.retval) {
+      const value = simRes.result.retval.value() as unknown as any[];
+      // value is an array of ScVals if it's a Tuple
+      // get_votes returns (u32, u32) Tuple
+      if (Array.isArray(value) && value.length >= 2) {
+        return {
+          yes: value[0].u32(),
+          no: value[1].u32()
+        };
+      }
+    }
+    return { yes: 0, no: 0 };
+  } catch (error) {
+    console.error("Failed to fetch votes:", error);
+    return { yes: 0, no: 0 };
+  }
+};
+
+/** Cast a vote: Yes (true) or No (false) */
+export const castVote = async (publicKey: string, voteYes: boolean): Promise<string> => {
+  try {
+    const minBalance = 2.0;
+    const balance = await fetchBalance(publicKey);
+    if (parseFloat(balance) < minBalance) {
+      throw new Error("InsufficientBalance");
     }
 
-    // 4. Submit the transaction to the Horizon network
-    const signedTx = TransactionBuilder.fromXDR(
-      res.signedTxXdr,
-      Networks.TESTNET
-    ) as Transaction;
+    const accountRes = await server.getAccount(publicKey);
+    const contract = new Contract(CONTRACT_ID);
 
-    const response = await server.submitTransaction(signedTx);
+    const voterVal = xdr.ScVal.scvAddress(xdr.ScAddress.scAddressTypeAccount(xdr.PublicKey.publicKeyTypeEd25519(Buffer.from(Keypair.fromPublicKey(publicKey).rawPublicKey()))));
+    const boolVal = xdr.ScVal.scvBool(voteYes);
 
-    if (!response.successful) {
-      throw new Error("Transaction submission failed on Stellar network.");
+    let tx = new TransactionBuilder(accountRes, { fee: '100000', networkPassphrase: Networks.TESTNET })
+      .addOperation(contract.call('vote', voterVal, boolVal))
+      .setTimeout(30)
+      .build();
+
+    const simRes = await server.simulateTransaction(tx);
+    if (!rpc.Api.isSimulationSuccess(simRes)) {
+      if (simRes.error) throw new Error(simRes.error);
+      throw new Error("Simulation failed. You may have already voted.");
     }
 
-    return response.hash;
+    const preparedTx = await server.prepareTransaction(tx);
+
+    const { signedTxXdr } = await StellarWalletsKit.signTransaction(preparedTx.toXDR(), {
+      networkPassphrase: Networks.TESTNET,
+    });
+
+    const signedTxBuilt = TransactionBuilder.fromXDR(signedTxXdr, Networks.TESTNET);
+    const submitRes = await server.sendTransaction(signedTxBuilt);
+
+    if (submitRes.status === 'ERROR') {
+      throw new Error("Submit failed.");
+    }
+
+    const status = await pollTransactionStatus(submitRes.hash);
+    if (status.status === 'SUCCESS') {
+      return submitRes.hash;
+    } else {
+      throw new Error(`Transaction failed heavily: ${status.status}`);
+    }
   } catch (error: any) {
-    console.error("Transaction failed:", error);
-    throw new Error(error.message || "Unknown transaction error");
+    if (String(error).includes("rejected") || String(error).includes("User declined")) {
+      throw new Error("WalletRejected");
+    }
+    throw error;
   }
 };

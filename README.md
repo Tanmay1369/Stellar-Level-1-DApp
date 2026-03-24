@@ -1,110 +1,38 @@
-# 🌟 Stellar Level 1 dApp — White Belt Challenge
+# Stellar Level 2 - Yellow Belt Submission: Soroban Live Poll
 
-A beginner-friendly Stellar Testnet dApp built with **React + Vite**, **Freighter Wallet**, and the **Stellar SDK**. Demonstrates core Stellar fundamentals: wallet connection, balance fetching, and XLM transactions.
+This project implements a Live Poll decentralized application (dApp) on the Stellar Testnet, built with React, Vite, and Soroban smart contracts. It successfully integrates `StellarWalletsKit` to interact with multiple wallets (Freighter, xBull), processes transactions on the Stellar network, and synchronizes real-time contract state.
 
----
+## 📝 Features
+- **Multi-Wallet Integration**: Connects to both Freighter and xBull using `@creit.tech/stellar-wallets-kit`.
+- **Smart Contract Deployment**: Custom Soroban Rust smart contract deployed on the Stellar testnet.
+- **Contract Interaction**: Read (`get_votes`) and Write (`vote`) methods invoked from the frontend using the new Soroban RPC SDK.
+- **Robust Error Handling**: Handles edge cases like "Wallet Not Found", "User Rejected Request", and "Insufficient Balance".
+- **Real-time Event Synchronization**: Periodically polls the smart contract state to update vote counts seamlessly.
 
-## 📸 Screenshots
+## 🛠 Prerequisites
+- Node.js (v18+)
+- Basic understanding of Stellar & Soroban testnet.
+- [Freighter](https://www.freighter.app/) or [xBull](https://xbull.app/) browser extension installed.
 
-### 1. Wallet Connected
-> `[Text Tag: WALLET_CONNECTED_UI]`
+## 🚀 Setup Instructions
+1. Clone the repository.
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
+4. Open the application in your browser (usually `http://localhost:5173`).
+5. Ensure your Stellar wallet extension is active, set to the **Testnet**, and funded with at least 2 XLM to cover connection reserves.
 
-<!-- Replace the line below with your screenshot after running the app -->
-![Wallet Connected](screenshots/wallet-connected.png)
+## 🏁 Submission Deliverables
+- **Live Demo Link:** *(Optional: Deploy to Vercel/Netlify and add link here)*
+- **Screenshot:** *(Optional: Add a screenshot of the multi-wallet selection UI here)*
+- **Deployed Contract Address:** `CDRZCJDK7G5U4PBKLTPQL4ENKLPHHJJ4A75G6OFPKBPFPHIDRP73GDUC`
+- **Transaction Hash of a Contract Call (Deploy & Initial Interaction):** `d782d0b30c28ca6bc962c2dd37047cbd94d012f43bd1be4b2275393a1fb5a433`
 
----
+> View Transaction on [Stellar Expert Explorer](https://stellar.expert/explorer/testnet/tx/d782d0b30c28ca6bc962c2dd37047cbd94d012f43bd1be4b2275393a1fb5a433)
 
-### 2. Balance Displayed
-> `[Text Tag: BALANCE_DISPLAY_UI]`
-
-<!-- Replace the line below with your screenshot showing the XLM balance -->
-![Balance Display](screenshots/balance-display.png)
-
----
-
-### 3. Transaction Success
-> `[Text Tag: TRANSACTION_SUCCESS_UI]`
-
-<!-- Replace the line below with your screenshot showing a successful transaction and hash -->
-![Transaction Success](screenshots/transaction-success.png)
-
----
-
-### 4. Transaction on Stellar.Expert
-<!-- Replace the line below with your Stellar.Expert screenshot -->
-![Stellar Expert](screenshots/stellar-expert.png)
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- [Node.js](https://nodejs.org/) v18+
-- [Freighter Wallet](https://freighter.app/) browser extension (set to **Testnet**)
-
-### Installation
-
-```bash
-# Clone the repo
-git clone https://github.com/Tanmay1369/Stellar-Level-1-DApp.git
-cd Stellar-Level-1-DApp
-
-# Install dependencies
-npm install
-
-# Start the development server
-npm run dev
-```
-
-Open [http://localhost:5173](http://localhost:5173) in your browser.
-
----
-
-## 🧪 How to Test
-
-1. Install and open the **Freighter** browser extension
-2. Switch Freighter network to **Testnet**
-3. Fund your testnet wallet at [Stellar Laboratory Friendbot](https://laboratory.stellar.org/#account-creator?network=test)
-4. Click **Connect Wallet** in the app
-5. Your XLM balance will appear automatically
-6. Enter a recipient testnet address and amount, then hit **Send Transaction**
-7. Approve the transaction in Freighter
-8. View the success message and click the hash link to see it on Stellar.Expert
-
----
-
-## 🛠️ Tech Stack
-
-| Technology | Purpose |
-|---|---|
-| React + Vite | Frontend framework |
-| TypeScript | Type safety |
-| Tailwind CSS | Styling |
-| `@stellar/freighter-api` | Wallet connection & signing |
-| `@stellar/stellar-sdk` | Transaction building |
-| Horizon Testnet API | Balance & transaction submission |
-
----
-
-## ✅ Level 1 Requirements Met
-
-- [x] Freighter wallet integration (Testnet)
-- [x] Connect & Disconnect wallet
-- [x] Fetch and display XLM balance
-- [x] Send XLM transaction on testnet
-- [x] Transaction success/failure feedback
-- [x] Transaction hash with Stellar.Expert link
-- [x] Public GitHub repository
-
----
-
-## 📁 Project Structure
-
-```
-src/
-├── App.tsx          # Main UI with wallet + transaction logic
-├── lib/
-│   └── stellar.ts   # Freighter API + Stellar SDK utilities
-├── main.tsx         # App entry point
-└── index.css        # Tailwind CSS setup
-```
+Enjoy the Live Poll dApp!
